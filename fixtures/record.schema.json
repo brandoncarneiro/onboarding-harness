@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Example Community Church",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+    },
+    "mobile": {
+      "type": "string",
+      "minLength": 7,
+      "title": "Mobile"
+    },
+    "organizationName": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Organization name"
+    },
+    "city": {
+      "type": "string",
+      "minLength": 1,
+      "title": "City"
+    },
+    "agreements": {
+      "type": "object",
+      "title": "Agreements",
+      "properties": {
+        "storeDetails": {
+          "type": "boolean",
+          "const": true,
+          "title": "I agree these details may be stored for this intake"
+        }
+      },
+      "required": ["storeDetails"]
+    }
+  },
+  "required": ["name", "email", "mobile", "organizationName", "city", "agreements"]
+}
