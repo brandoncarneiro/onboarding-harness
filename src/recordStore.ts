@@ -10,7 +10,7 @@ import {
   type DraftValues,
 } from "./values.ts";
 
-export type Channel = "web" | "telegram" | "imessage";
+export type Channel = "web" | "telegram";
 
 export type SessionRecord = {
   id: string;
@@ -54,7 +54,7 @@ export function readSession(db: DatabaseSync, channel: Channel, channelKey: stri
   if (!row) return undefined;
   const record = row as Record<string, unknown>;
   const foundChannel = asString(record.channel);
-  if (foundChannel !== "web" && foundChannel !== "telegram" && foundChannel !== "imessage") {
+  if (foundChannel !== "web" && foundChannel !== "telegram") {
     throw new Error("unknown channel");
   }
   return {

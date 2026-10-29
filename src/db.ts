@@ -47,9 +47,6 @@ export function snapshotDatabase(db: DatabaseSync): DatabaseSnapshot {
     linkCodes: db.prepare(
       `SELECT code, group_id, session_id, created_at, expires_at, used_at FROM link_codes ORDER BY code`,
     ).all(),
-    imsgPairCodes: db.prepare(
-      `SELECT code, created_at, expires_at, used_at FROM imsg_pair_codes ORDER BY code`,
-    ).all(),
     telegramUpdates: db.prepare(
       `SELECT update_id, reply, chat_id, sent_at, state, owner, applied_reply, checkpoint_version
        FROM telegram_updates ORDER BY update_id`,
@@ -68,7 +65,6 @@ export type DatabaseSnapshot = {
   sessions: unknown[];
   records: unknown[];
   linkCodes: unknown[];
-  imsgPairCodes: unknown[];
   telegramUpdates: unknown[];
   knowledgePages: unknown[];
   knowledgePassages: unknown[];
@@ -79,6 +75,8 @@ export function refuse(message: string): never {
 }
 
 function migrate(db: DatabaseSync): void {
+  // Retire unused pairing credentials without deleting historical intake records.
+  db.exec("DROP TABLE IF EXISTS imsg_pair_codes");
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_groups (
       id TEXT PRIMARY KEY,
@@ -91,7 +89,7 @@ function migrate(db: DatabaseSync): void {
 
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
-      channel TEXT NOT NULL CHECK (channel IN ('web', 'telegram', 'imessage')),
+      channel TEXT NOT NULL CHECK (channel IN ('web', 'telegram')),
       channel_key TEXT NOT NULL,
       group_id TEXT NOT NULL REFERENCES session_groups(id),
       created_at TEXT NOT NULL,
@@ -110,13 +108,6 @@ function migrate(db: DatabaseSync): void {
       code TEXT PRIMARY KEY,
       group_id TEXT NOT NULL REFERENCES session_groups(id),
       session_id TEXT NOT NULL REFERENCES sessions(id),
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      used_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS imsg_pair_codes (
-      code TEXT PRIMARY KEY,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       used_at TEXT
@@ -165,32 +156,5 @@ function migrate(db: DatabaseSync): void {
     if (!telegramColumns.some((column) => column.name === name)) {
       db.exec(`ALTER TABLE telegram_updates ADD COLUMN ${name} ${definition}`);
     }
-  }
-  widenSessionChannels(db);
-}
-
-function widenSessionChannels(db: DatabaseSync): void {
-  const row = db.prepare(
-    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
-  ).get() as { sql?: string } | undefined;
-  if (!row?.sql || row.sql.includes("'imessage'")) return;
-  db.exec("PRAGMA foreign_keys = OFF");
-  try {
-    db.exec(`
-      CREATE TABLE sessions_next (
-        id TEXT PRIMARY KEY,
-        channel TEXT NOT NULL CHECK (channel IN ('web', 'telegram', 'imessage')),
-        channel_key TEXT NOT NULL,
-        group_id TEXT NOT NULL REFERENCES session_groups(id),
-        created_at TEXT NOT NULL,
-        UNIQUE (channel, channel_key)
-      );
-      INSERT INTO sessions_next (id, channel, channel_key, group_id, created_at)
-        SELECT id, channel, channel_key, group_id, created_at FROM sessions;
-      DROP TABLE sessions;
-      ALTER TABLE sessions_next RENAME TO sessions;
-    `);
-  } finally {
-    db.exec("PRAGMA foreign_keys = ON");
   }
 }

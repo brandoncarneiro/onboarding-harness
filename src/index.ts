@@ -1,10 +1,8 @@
 import { join } from "node:path";
 import { loadConfig, loadEnvFile } from "./config.ts";
-import { applyIncoming } from "./conversation.ts";
 import { createModel } from "./model.ts";
 import { openDatabase } from "./db.ts";
 import { createHttpServer } from "./http.ts";
-import { startImsg } from "./imsg-runtime.ts";
 import { indexKnowledgeDirectory } from "./knowledge.ts";
 import { createMessenger } from "./outbound.ts";
 import { loadSchema } from "./schema.ts";
@@ -23,22 +21,6 @@ const deps = {
   messenger: createMessenger(config),
   now: () => Date.now(),
 };
-
-startImsg({
-  mode: config.imsgMode,
-  command: config.imsgCommand,
-  db,
-  now: deps.now,
-  pairPort: config.imsgPairPort,
-  receive: async (chatId, text) => {
-    const result = await applyIncoming(deps, {
-      channel: "imessage",
-      channelKey: String(chatId),
-      message: text,
-    });
-    return result.reply;
-  },
-});
 
 const server = createHttpServer(deps);
 

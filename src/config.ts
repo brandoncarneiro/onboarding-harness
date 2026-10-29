@@ -12,11 +12,6 @@ export type AppConfig = {
   modelName: string;
   telegramBotToken: string;
   telegramWebhookSecret: string;
-  imsgMode: "" | "local" | "remote";
-  imsgCommand: string;
-  imsgPairHost: string;
-  imsgPairPort: number;
-  imsgPairCode: string;
 };
 
 export function loadEnvFile(path: string, env: NodeJS.ProcessEnv): void {
@@ -46,14 +41,6 @@ export function loadConfig(env: NodeJS.ProcessEnv, root: string): AppConfig {
   if (!Number.isInteger(port) || port <= 0) {
     throw new Error("PORT must be a positive integer");
   }
-  const imsgMode = env.IMSG_MODE ?? "";
-  if (imsgMode !== "" && imsgMode !== "local" && imsgMode !== "remote") {
-    throw new Error("IMSG_MODE must be local or remote");
-  }
-  const imsgPairPort = env.IMSG_PAIR_PORT ? Number(env.IMSG_PAIR_PORT) : 8791;
-  if (!Number.isInteger(imsgPairPort) || imsgPairPort <= 0) {
-    throw new Error("IMSG_PAIR_PORT must be a positive integer");
-  }
   return {
     port,
     databasePath: env.DATABASE_PATH || join(root, "data", "onboarding.sqlite"),
@@ -65,10 +52,5 @@ export function loadConfig(env: NodeJS.ProcessEnv, root: string): AppConfig {
     modelName: env.MODEL_NAME ?? "",
     telegramBotToken: env.TELEGRAM_BOT_TOKEN ?? "",
     telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET ?? "",
-    imsgMode,
-    imsgCommand: env.IMSG_COMMAND || "imsg",
-    imsgPairHost: env.IMSG_PAIR_HOST ?? "",
-    imsgPairPort,
-    imsgPairCode: env.IMSG_PAIR_CODE ?? "",
   };
 }
