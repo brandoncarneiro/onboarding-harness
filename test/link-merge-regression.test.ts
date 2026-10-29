@@ -18,10 +18,10 @@ describe("link merge regressions", () => {
 
       const before = harness.snapshot();
       assert.equal(redeemLinkCode(harness.db, {
-        channel: "web", channelKey: "late", code: stale, nowMs,
+        channel: "imessage", channelKey: "late", code: stale, nowMs,
       }).linked, false);
       assert.deepEqual(harness.snapshot(), before);
-      assert.equal(readSession(harness.db, "web", "late"), undefined);
+      assert.equal(readSession(harness.db, "imessage", "late"), undefined);
     });
   });
 

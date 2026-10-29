@@ -2,7 +2,7 @@
 
 A free, self-hosted intake harness for one church or Christian organization. One install serves one organization. The organization supplies its own record schema and its own pages.
 
-V0 is one conversation that saves a record. A person can finish it in Telegram or in the plain web chat.
+V0 is one conversation that saves a record. A person can finish it in Telegram, in the plain web chat, or by phone and iMessage. Telegram is the channel that runs without a Mac. Phone and iMessage need the Mac that is signed into Messages.
 
 The checked-in example is a fictional local church, Example Community Church. No customer is represented here.
 
@@ -110,6 +110,22 @@ curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" 
 `GET /health` returns `{"ok":true}`.
 
 One SQLite file, `data/onboarding.sqlite` unless `DATABASE_PATH` is set, holds records, sessions, link codes, and knowledge pages. Search is full text. Each hit has a URL and a passage.
+
+## Phone and iMessage
+
+Phone and iMessage use [openclaw/imsg](https://github.com/openclaw/imsg) (MIT). The harness speaks JSON-RPC 2.0 to an `imsg rpc` child on stdin and stdout. It calls `chats.list`, `messages.history`, `watch.subscribe`, `watch.unsubscribe`, and `send` only. `send` sets `transport` to `applescript`. The harness does not call the IMCore bridge, `imsg launch`, or anything that needs SIP disabled.
+
+OpenClaw is not imported and not required. Install the `imsg` binary on the Mac that is signed into Messages.
+
+On that same Mac, set `IMSG_MODE=local`. The harness spawns `imsg rpc`.
+
+When the harness runs on another machine, set `IMSG_MODE=remote`. It prints a one-time pair code and listens on `IMSG_PAIR_PORT` (8791 unless you set it). On the Mac, set `IMSG_PAIR_HOST`, `IMSG_PAIR_PORT`, and `IMSG_PAIR_CODE`, then run:
+
+```bash
+node src/imsg-companion.ts
+```
+
+The companion dials out, presents the code, and forwards the local `imsg rpc` stdio. A code that is missing, wrong, used, or expired is rejected and writes nothing. The pair socket is plaintext. Do not expose it on a public port. Telegram keeps working with no Mac.
 
 ## Later adapters
 
