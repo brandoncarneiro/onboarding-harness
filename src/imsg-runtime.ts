@@ -8,6 +8,7 @@ import {
   socketTransport,
   spawnImsgRpc,
   type StdioTransport,
+  type InboundImsg,
 } from "./imsg.ts";
 
 export function startImsg(options: {
@@ -16,22 +17,32 @@ export function startImsg(options: {
   db: DatabaseSync;
   now: () => number;
   pairPort: number;
-  receive: (chatId: number, text: string) => Promise<string>;
+  receive: (chatId: number, text: string, guid?: string, replyTo?: string) => Promise<string>;
   openLocal?: () => StdioTransport;
   listen?: (port: number, onConnection: (transport: StdioTransport) => void) => void;
   log?: (line: string) => void;
 }): void {
   if (options.mode === "") return;
-  const receive = async (message: { chatId: number; text: string }) => options.receive(message.chatId, message.text);
+  const receive = async (message: InboundImsg) => options.receive(message.chatId, message.text, message.guid, message.replyTo);
   if (options.mode === "local") {
-    try {
-      const transport = (options.openLocal ?? (() => spawnImsgRpc(options.command)))();
-      void attachImsgIntake(new ImsgRpcClient(transport), receive).catch(() => {
-        console.error("imsg is unavailable");
-      });
-    } catch {
-      console.error("imsg is unavailable");
-    }
+    let attempts = 0;
+    const connect = () => {
+      if (attempts++ >= 4) { console.error("imsg reconnect attempts exhausted"); return; }
+      try {
+        const transport = (options.openLocal ?? (() => spawnImsgRpc(options.command)))();
+        let scheduled = false;
+        const reconnect = () => {
+          if (scheduled) return;
+          scheduled = true;
+          transport.close();
+          const timer = setTimeout(connect, Math.min(1000 * 2 ** (attempts - 1), 8000));
+          timer.unref();
+        };
+        transport.onClose?.(reconnect);
+        void attachImsgIntake(new ImsgRpcClient(transport), receive, options.db).catch(reconnect);
+      } catch { console.error("imsg is unavailable"); }
+    };
+    connect();
     return;
   }
   const code = issueImsgPairCode(options.db, options.now());
@@ -46,7 +57,7 @@ export function bindCompanion(
   db: DatabaseSync,
   now: () => number,
   transport: StdioTransport,
-  receive: (message: { chatId: number; text: string }) => Promise<string>,
+  receive: (message: InboundImsg) => Promise<string>,
 ): void {
   let paired = false;
   const relay = {
@@ -56,6 +67,7 @@ export function bindCompanion(
     onLine(handler: (line: string) => void) {
       relay.handler = handler;
     },
+    onClose(handler: () => void) { transport.onClose?.(handler); },
     close() {
       transport.close();
     },
@@ -73,7 +85,7 @@ export function bindCompanion(
         return;
       }
       paired = true;
-      void attachImsgIntake(new ImsgRpcClient(relay), receive).catch(() => {
+      void attachImsgIntake(new ImsgRpcClient(relay), receive, db).catch(() => {
         console.error("imsg is unavailable");
       });
       return;

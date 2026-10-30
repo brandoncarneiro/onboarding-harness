@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Socket } from "node:net";
 import type { DatabaseSync } from "node:sqlite";
@@ -25,6 +26,7 @@ export type StdioTransport = {
   writeLine(line: string): void;
   onLine(handler: (line: string) => void): void;
   close(): void;
+  onClose?(handler: () => void): void;
 };
 
 export type RpcNotification = {
@@ -36,6 +38,7 @@ export class ScriptedStdio implements StdioTransport {
   readonly written: string[] = [];
   private handler: ((line: string) => void) | undefined;
   private closed = false;
+  private readonly closeHandlers = new Set<() => void>();
 
   writeLine(line: string): void {
     if (this.closed) return;
@@ -50,8 +53,12 @@ export class ScriptedStdio implements StdioTransport {
     if (!this.closed) this.handler?.(line);
   }
 
+  onClose(handler: () => void): void { this.closeHandlers.add(handler); if (this.closed) handler(); }
+
   close(): void {
+    if (this.closed) return;
     this.closed = true;
+    for (const handler of this.closeHandlers) handler();
   }
 }
 
@@ -76,12 +83,19 @@ export class ImsgRpcClient {
   private readonly pending = new Map<string, {
     resolve: (value: unknown) => void;
     reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
   }>();
   private readonly notifications = new Set<(note: RpcNotification) => void>();
 
-  constructor(transport: StdioTransport) {
+  private closed = false;
+
+  private readonly timeoutMs: number;
+
+  constructor(transport: StdioTransport, timeoutMs = 30_000) {
+    this.timeoutMs = timeoutMs;
     this.transport = transport;
     transport.onLine((line) => this.onLine(line));
+    transport.onClose?.(() => this.close());
   }
 
   chats(limit = 20): Promise<{ chats: unknown[] }> {
@@ -129,13 +143,27 @@ export class ImsgRpcClient {
     const id = String(this.nextId);
     this.nextId += 1;
     const line = encodeImsgRequest(method, params, id);
-    this.transport.writeLine(line);
     return new Promise((resolve, reject) => {
-      this.pending.set(id, {
-        resolve: (value) => resolve(value as T),
-        reject,
-      });
+      if (this.closed) { reject(new Error("imsg disconnected")); return; }
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error("imsg request timed out"));
+      }, this.timeoutMs);
+      timer.unref();
+      this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer });
+      try { this.transport.writeLine(line); }
+      catch { clearTimeout(timer); this.pending.delete(id); reject(new Error("imsg disconnected")); }
     });
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("imsg disconnected"));
+    }
+    this.pending.clear();
   }
 
   private onLine(line: string): void {
@@ -155,6 +183,7 @@ export class ImsgRpcClient {
     const pending = this.pending.get(String(parsed.id));
     if (!pending) return;
     this.pending.delete(String(parsed.id));
+    clearTimeout(pending.timer);
     if (parsed.error !== undefined) {
       pending.reject(new Error("imsg request failed"));
       return;
@@ -165,6 +194,7 @@ export class ImsgRpcClient {
 
 export type InboundImsg = {
   chatId: number;
+  replyTo: string;
   text: string;
   guid?: string;
 };
@@ -182,18 +212,19 @@ export function inboundFromNotification(note: RpcNotification): InboundImsg | nu
   if (typeof message.chat_guid !== "string" || !/^[^;\s]+;-;[^;\s]+$/.test(message.chat_guid)) return null;
   if (!Array.isArray(message.participants) || message.participants.length !== 1) return null;
   const participant: unknown = message.participants[0];
-  if (typeof participant !== "string" || !participant.trim() || participant !== message.sender) return null;
+  if (typeof participant !== "string" || !/^[^;\s]+$/.test(participant) || participant !== message.sender) return null;
   if (typeof message.text !== "string" || !message.text.trim()) return null;
   if (!isPositiveInt(message.chat_id)) return null;
   const guid = typeof message.guid === "string" && message.guid ? message.guid : undefined;
   return guid === undefined
-    ? { chatId: message.chat_id, text: message.text }
-    : { chatId: message.chat_id, text: message.text, guid };
+    ? { chatId: message.chat_id, replyTo: participant, text: message.text }
+    : { chatId: message.chat_id, replyTo: participant, text: message.text, guid };
 }
 
 export async function attachImsgIntake(
   client: ImsgRpcClient,
   receive: (message: InboundImsg) => Promise<string>,
+  db?: DatabaseSync,
 ): Promise<void> {
   const seenGuids = new Set<string>();
   client.onNotification((note) => {
@@ -205,17 +236,63 @@ export async function attachImsgIntake(
     }
     const inbound = inboundFromNotification(note);
     if (!inbound) return;
-    if (inbound.guid) {
-      if (seenGuids.has(inbound.guid)) return;
-      seenGuids.add(inbound.guid);
-    }
-    void receive(inbound)
-      .then((reply) => client.sendText({ chatId: inbound.chatId, text: reply }))
-      .catch(() => {
+    // Production requires a durable GUID. Missing identity cannot safely be
+    // interpreted as a fresh answer on every reconnect.
+    if (db && !inbound.guid) return;
+    const identity = inbound.guid;
+    if (identity && seenGuids.has(identity)) return;
+    if (identity) seenGuids.add(identity);
+    void (async () => {
+      try {
+        if (db && db.prepare(`SELECT sent_at FROM incoming_requests WHERE channel = 'imessage'
+          AND channel_key = ? AND request_id = ? AND sent_at IS NOT NULL`).get(inbound.replyTo, identity!)) return;
+        const reply = await receive(inbound);
+        await sendImsgReply(client, inbound.replyTo, reply);
+        if (db) db.prepare(`UPDATE incoming_requests SET sent_at = ? WHERE channel = 'imessage'
+          AND channel_key = ? AND request_id = ?`).run(new Date().toISOString(), inbound.replyTo, identity!);
+      } catch {
         console.error("imsg is unavailable");
-      });
+      } finally {
+        if (identity) seenGuids.delete(identity);
+      }
+    })();
   });
+  // Recover committed replies even when imsg does not repeat the notification.
+  if (db) {
+    const pending = db.prepare(`SELECT channel_key, request_id, message, result_json, reply_to FROM incoming_requests
+      WHERE channel = 'imessage' AND sent_at IS NULL AND reply_to IS NOT NULL`).all() as {
+        channel_key: string; request_id: string; message: string; result_json: string | null; reply_to: string;
+      }[];
+    for (const row of pending) {
+      // Numeric chat IDs belong to one Mac. Durable routing and intake identity
+      // use the original direct participant, including after changing Macs.
+      if (!/^[^;\s]+$/.test(row.reply_to) || row.channel_key !== row.reply_to) continue;
+      const inbound = { chatId: 0, replyTo: row.reply_to, guid: row.request_id, text: row.message };
+      if (seenGuids.has(row.request_id)) continue;
+      seenGuids.add(row.request_id);
+      try {
+        const reply = row.result_json ? (JSON.parse(row.result_json) as { reply: string }).reply : await receive(inbound);
+        await sendImsgReply(client, inbound.replyTo, reply);
+        db.prepare(`UPDATE incoming_requests SET sent_at = ? WHERE channel = 'imessage'
+          AND channel_key = ? AND request_id = ?`).run(new Date().toISOString(), row.channel_key, row.request_id);
+      } catch { console.error("imsg is unavailable"); }
+      finally { seenGuids.delete(row.request_id); }
+    }
+  }
   await client.watch();
+}
+
+async function sendImsgReply(client: ImsgRpcClient, to: string, text: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await client.sendText({ to, text });
+      if (!response || response.ok !== true) throw new Error("imsg send failed");
+      return;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      await delay(50 * 2 ** attempt);
+    }
+  }
 }
 
 export function issueImsgPairCode(db: DatabaseSync, nowMs: number): string {
@@ -275,6 +352,18 @@ export function beginCompanionPair(local: StdioTransport, remote: StdioTransport
     const buffered: string[] = [];
     let paired = false;
     let rejected = false;
+    const fail = () => {
+      if (paired || rejected) return;
+      rejected = true;
+      clearTimeout(timeout);
+      local.close(); remote.close();
+      reject(new Error("imsg pairing disconnected or timed out"));
+    };
+    const timeout = setTimeout(fail, 30_000);
+    timeout.unref();
+    local.onClose?.(() => { fail(); remote.close(); });
+    remote.onClose?.(() => { fail(); local.close(); });
+    if (rejected) return;
     local.onLine((line) => {
       if (rejected) return;
       if (paired) remote.writeLine(line);
@@ -285,6 +374,7 @@ export function beginCompanionPair(local: StdioTransport, remote: StdioTransport
       if (!paired) {
         if (!isExactPairAck(line, code)) {
           rejected = true;
+          clearTimeout(timeout);
           buffered.length = 0;
           local.close();
           remote.close();
@@ -292,6 +382,7 @@ export function beginCompanionPair(local: StdioTransport, remote: StdioTransport
           return;
         }
         paired = true;
+        clearTimeout(timeout);
         for (const item of buffered) remote.writeLine(item);
         resolve();
         return;
@@ -367,6 +458,7 @@ export function socketTransport(socket: Socket): StdioTransport {
       if (!closed) socket.write(`${line}\n`);
     },
     onLine: (handler) => transport.onLine(handler),
+    onClose: (handler) => transport.onClose(handler),
     close,
   };
 }
@@ -403,9 +495,15 @@ class ChildStdioTransport implements StdioTransport {
   private readonly child: ChildProcess;
   private handler: ((line: string) => void) | undefined;
   private buffer = "";
+  private readonly lifecycle = new ScriptedStdio();
+
+  onClose(handler: () => void): void { this.lifecycle.onClose(handler); }
 
   constructor(child: ChildProcess) {
     this.child = child;
+    child.on("close", () => this.lifecycle.close());
+    child.on("error", () => this.lifecycle.close());
+    child.stdin?.on("error", () => this.lifecycle.close());
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string | Buffer) => {
       this.buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");

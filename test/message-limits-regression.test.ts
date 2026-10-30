@@ -29,7 +29,7 @@ describe("message admission and scripture parsing", () => {
       const message = `Quote ${"x".repeat(4090)}`;
       const response = await dispatch(harness.deps, {
         method: "POST", path: "/api/chat", headers: {},
-        body: JSON.stringify({ sessionId: "at-limit", message }),
+        body: JSON.stringify({ requestId: crypto.randomUUID(), sessionId: "at-limit", message }),
       });
       assert.equal(response.status, 200);
       assert.equal(harness.model.requests[0]?.messages[1]?.content, message);
@@ -41,7 +41,7 @@ describe("message admission and scripture parsing", () => {
       const before = harness.snapshot();
       const response = await dispatch(harness.deps, {
         method: "POST", path: "/api/chat", headers: {},
-        body: JSON.stringify({ sessionId: "too-long", message: "x".repeat(4097) }),
+        body: JSON.stringify({ requestId: crypto.randomUUID(), sessionId: "too-long", message: "x".repeat(4097) }),
       });
       assert.equal(response.status, 413);
       assert.match(JSON.parse(response.body).error, /message.*too long|message.*4096/i);
@@ -77,7 +77,7 @@ describe("message admission and scripture parsing", () => {
       assert.ok(address && typeof address !== "string");
       try {
         const response = await fetch(`http://127.0.0.1:${address.port}/api/chat`, {
-          method: "POST", body: JSON.stringify({ sessionId: "body-limit", message: "x".repeat(1_000_001) }),
+          method: "POST", body: JSON.stringify({ requestId: crypto.randomUUID(), sessionId: "body-limit", message: "x".repeat(1_000_001) }),
         });
         assert.equal(response.status, 413);
         assert.equal(harness.model.requests.length, 0);

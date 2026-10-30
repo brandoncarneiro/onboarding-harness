@@ -122,6 +122,12 @@ function migrate(db: DatabaseSync): void {
       used_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS incoming_requests (
+      channel TEXT NOT NULL, channel_key TEXT NOT NULL, request_id TEXT NOT NULL,
+      message TEXT NOT NULL, prepared_json TEXT NOT NULL, result_json TEXT, sent_at TEXT, reply_to TEXT,
+      PRIMARY KEY (channel, channel_key, request_id)
+    );
+
     CREATE TABLE IF NOT EXISTS telegram_updates (
       update_id INTEGER PRIMARY KEY,
       reply TEXT NOT NULL,
@@ -152,6 +158,10 @@ function migrate(db: DatabaseSync): void {
       content_rowid='id'
     );
   `);
+  const incomingColumns = db.prepare("PRAGMA table_info(incoming_requests)").all();
+  if (!incomingColumns.some((column) => column.name === "reply_to")) {
+    db.exec("ALTER TABLE incoming_requests ADD COLUMN reply_to TEXT");
+  }
   const telegramColumns = db.prepare("PRAGMA table_info(telegram_updates)").all();
   if (!telegramColumns.some((column) => column.name === "state")) {
     db.exec(`ALTER TABLE telegram_updates ADD COLUMN state TEXT NOT NULL DEFAULT 'ready'

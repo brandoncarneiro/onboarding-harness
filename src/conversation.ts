@@ -35,6 +35,7 @@ export type AppDeps = {
   config: AppConfig;
   model: LanguageModel;
   fields: FieldSpec[];
+  organizationName?: string;
   messenger: OutboundMessenger;
   now: () => number;
 };
@@ -46,7 +47,7 @@ export type ChatResult = {
   sessionId: string;
 };
 
-const CONFIRM = /^yes$/;
+const CONFIRM = /^yes$/i;
 const ISSUE = /^(?:link code|get link code|get a link code)$/i;
 const REDEEM = /^(?:use code|code)\s+([A-Za-z0-9]{8})$/i;
 const EDIT = /^(?:change|set|update)\s+(.+?)\s+to\s+(.+)$/i;

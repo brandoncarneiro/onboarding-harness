@@ -26,6 +26,8 @@ npm test
 npm run typecheck
 ```
 
+Staff can retrieve confirmed submissions on the server with `npm run export -- --format csv --output /private/staff/intake.csv` (use a new file in an existing private directory). JSON is also supported. Export includes saved revisions, excludes drafts, and creates owner-only files. See [record export](docs/record-export.md) for access, format, and handling instructions.
+
 Without `MODEL_API_KEY`, the server uses a local model that repeats a reply the server has already checked. To use your own model, set `MODEL_API_KEY`, `MODEL_BASE_URL`, and `MODEL_NAME` for any API that accepts OpenAI-style chat completions. The model sits behind `LanguageModel` in `src/model.ts`.
 
 Messages are limited to 4,096 UTF-16 code units (JavaScript string length), measured before trimming whitespace. Oversized messages do not change the intake or call the model. The web API returns HTTP 413; messaging channels return a request to shorten the message.
@@ -33,6 +35,8 @@ Messages are limited to 4,096 UTF-16 code units (JavaScript string length), meas
 ## Example Community Church
 
 The demo schema is `fixtures/record.schema.json`. It asks for name, email, mobile, organization name, and city, plus the agreements that schema marks required. Replace that file to change the intake. Field titles come from the schema.
+
+The root schema title supplies the church name on the web page. Only the documented schema subset is supported; invalid types or unsupported validation rules stop startup. See [schema customization](docs/schema.md). Draft answers are stored as people type them, before final consent; the web page explains this. Final confirmation accepts `yes` or `Yes` after the summary.
 
 The demo pages are the only knowledge in this repo:
 
@@ -97,6 +101,12 @@ use code ABCD2345
 
 Use the code you were given. It expires after 15 minutes and works once. The two chats then share one record.
 
+## Safe message retries
+
+Custom web clients must send `POST /api/chat` with JSON `{ "sessionId": "your-session", "requestId": "unique-message-id", "message": "your answer" }`. Both IDs use 1–80 letters, digits, underscores or hyphens. Generate a new request ID for a new user action. After response loss, resend the same ID and exact original message; the stored result is returned without interpreting that answer again. Reusing an ID with different text returns HTTP 409. The bundled page retains a pending request across reloads and provides a Retry message button.
+
+Intake changes and their replay checkpoint commit together. Confirmation is never inferred from a retry of an earlier consent response. Replay checkpoints contain message text and response/draft data alongside the existing intake database; include them in the organization's data-handling policy.
+
 ## Point Telegram at the webhook
 
 Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` in `.env`. Restart the server. Telegram must be able to reach an HTTPS URL on this process.
@@ -120,6 +130,10 @@ Phone and iMessage use [openclaw/imsg](https://github.com/openclaw/imsg) (MIT). 
 OpenClaw is not imported and not required. Install the `imsg` binary on the Mac that is signed into Messages.
 
 Intake accepts verified one-to-one chats only. Group chats and notifications with missing, malformed, or conflicting chat metadata are ignored without changing the intake or sending a reply. Use an `imsg` version whose watch notifications include `is_group`, `chat_identifier`, `chat_guid`, and `participants`; older versions that omit this metadata cannot start an intake. This restriction applies to both local and remote mode.
+
+iMessage intake also requires each message's GUID. Durable checkpoints prevent a replayed GUID from becoming a new answer, and pending replies are retried after restart. Failed sends receive bounded retries; local connections receive bounded reconnect attempts. If all attempts fail, restart after fixing the connection. If a send reaches Messages but its acknowledgment is lost, a retry can produce a duplicate reply; intake is still applied once. Remote connections require a fresh pairing code after disconnection; a used one-time code cannot reconnect.
+
+Sessions and recovered replies use the verified direct participant's address, not a Mac's numeric chat row. Reconnecting another Mac cannot redirect a queued reply to an unrelated conversation with the same row number. Older numeric iMessage sessions and records are retained, but cannot be assigned automatically to a participant without proof of ownership; reconcile or link them explicitly before continuing. Legacy pending replies without a verified recipient are not sent automatically.
 
 On that same Mac, set `IMSG_MODE=local`. The harness spawns `imsg rpc`.
 

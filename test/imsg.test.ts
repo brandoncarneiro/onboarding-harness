@@ -143,7 +143,8 @@ describe("imsg", () => {
       await settle();
       const outgoing = request(io.written.at(-1) ?? "");
       assert.equal(outgoing.method, "send");
-      assert.equal(outgoing.params.chat_id, 7);
+      assert.equal(outgoing.params.to, "+15555550100");
+      assert.equal(outgoing.params.chat_id, undefined);
       assert.equal(outgoing.params.text, "What is your Name?");
       assert.equal(outgoing.params.transport, "applescript");
       assert.equal(JSON.stringify(outgoing).includes("bridge"), false);

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Intake</title>
+    <title>{{ORGANIZATION_NAME}} — Intake</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -47,12 +47,13 @@
   </head>
   <body>
     <main>
-      <h1>Intake</h1>
-      <p>Send a message. This page posts to the same HTTP API as Telegram.</p>
+      <h1>{{ORGANIZATION_NAME}}</h1>
+      <p>Share your details with us. You can review and change them before confirming your submission.</p>
+      <p>Your answers are saved as a draft as you go. Confirmed details are available to this organization's staff. If this organization enables an external AI provider, your messages are also sent to that provider. Contact the organization to ask about access or deletion.</p>
       <div id="log" aria-live="polite"></div>
       <form id="chat">
         <label for="message">Message</label>
-        <input id="message" name="message" autocomplete="off" required />
+        <input id="message" name="message" autocomplete="off" maxlength="4096" required />
         <button type="submit">Send</button>
       </form>
     </main>
@@ -68,41 +69,68 @@
       }
 
       const button = form.querySelector("button");
+      const pendingKey = "onboarding-harness-pending";
+      let pending = JSON.parse(sessionStorage.getItem(pendingKey) || "null");
+      let sending = false;
 
       function add(text) {
         log.textContent += (log.textContent ? "\n\n" : "") + text;
         log.scrollTop = log.scrollHeight;
       }
 
-      async function post(message, showUser) {
-        if (showUser) add("You: " + message);
+      async function post() {
+        if (!pending || sending) return;
+        sending = true;
         button.disabled = true;
         input.disabled = true;
         try {
           const response = await fetch("/api/chat", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ sessionId, message }),
+            body: JSON.stringify({ sessionId, requestId: pending.requestId, message: pending.message }),
           });
           const payload = await response.json();
+          if (response.status >= 500) throw new Error("retry required");
           add(payload.reply || payload.error || "The message was not accepted.");
+          pending = null;
+          sessionStorage.removeItem(pendingKey);
         } catch {
-          add("The message was not sent.");
+          add("We could not confirm delivery. Select Retry message to safely check the same message.");
         } finally {
+          sending = false;
           button.disabled = false;
-          input.disabled = false;
-          input.focus();
+          button.textContent = pending ? "Retry message" : "Send";
+          input.disabled = Boolean(pending);
+          if (!pending) input.focus();
         }
+      }
+
+      function queue(message, showUser) {
+        pending = { requestId: crypto.randomUUID(), message };
+        sessionStorage.setItem(pendingKey, JSON.stringify(pending));
+        if (showUser) add("You: " + message);
+        void post();
       }
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
+        if (sending) return;
+        if (pending) {
+          void post();
+          return;
+        }
         const message = input.value;
+        if (!message.trim()) return;
+        queue(message, true);
         input.value = "";
-        void post(message, true);
       });
 
-      void post("start", false);
+      if (pending) {
+        add("Checking delivery of your previous message…");
+        void post();
+      } else {
+        queue("start", false);
+      }
     </script>
   </body>
 </html>

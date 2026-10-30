@@ -53,10 +53,11 @@ async function deliver(io: ScriptedStdio, text: string, metadata: Record<string,
 
 function lastReply(io: ScriptedStdio): string {
   const outgoing = JSON.parse(io.written.at(-1) ?? "{}") as {
-    id: string; method: string; params: { chat_id: number; text: string; transport: string };
+    id: string; method: string; params: { to: string; chat_id?: number; text: string; transport: string };
   };
   assert.equal(outgoing.method, "send");
-  assert.equal(outgoing.params.chat_id, 7);
+  assert.equal(outgoing.params.to, "+15555550100");
+  assert.equal(outgoing.params.chat_id, undefined);
   assert.equal(outgoing.params.transport, "applescript");
   io.receive(JSON.stringify({ jsonrpc: "2.0", id: outgoing.id, result: { ok: true } }));
   return outgoing.params.text;

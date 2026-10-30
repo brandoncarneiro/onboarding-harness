@@ -1,15 +1,17 @@
+import { replayIncoming, RequestIdentityConflict } from "./replay.ts";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import { applyIncoming, prepareIncoming, completeIncoming, type AppDeps } from "./conversation.ts";
+import { prepareIncoming, completeIncoming, type AppDeps } from "./conversation.ts";
 import { readSession, readGroup } from "./recordStore.ts";
 import { intakeStatus } from "./values.ts";
 import { withTransaction } from "./db.ts";
 import { isRecord } from "./util.ts";
 import { secretMatches } from "./secrets.ts";
 import { MAX_MESSAGE_LENGTH, MESSAGE_TOO_LONG_REPLY } from "./messageLimits.ts";
+import { renderPublicPage } from "./publicPage.ts";
 
 export type HttpRequest = {
   method: string;
@@ -38,7 +40,7 @@ export async function dispatch(deps: AppDeps, request: HttpRequest): Promise<Htt
     return {
       status: 200,
       headers: { "content-type": "text/html; charset=utf-8", "x-content-type-options": "nosniff" },
-      body: html,
+      body: renderPublicPage(html, deps.organizationName ?? "Organization"),
     };
   }
   if (method === "POST" && request.path === "/api/chat") return handleChat(deps, request.body);
@@ -80,15 +82,21 @@ async function handleChat(deps: AppDeps, rawBody: string): Promise<HttpResponse>
     return json(400, { error: "invalid json" });
   }
   if (!isRecord(parsed)) return json(400, { error: "invalid json" });
-  const { sessionId, message } = parsed;
+  const { sessionId, requestId, message } = parsed;
   if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(sessionId)) {
     return json(400, { error: "invalid session" });
   }
   if (typeof message !== "string") return json(400, { error: "invalid message" });
   if (message.length > MAX_MESSAGE_LENGTH) return json(413, { error: MESSAGE_TOO_LONG_REPLY });
   if (!message.trim()) return json(400, { error: "invalid message" });
-  const result = await applyIncoming(deps, { channel: "web", channelKey: sessionId, message });
-  return json(200, result);
+  if (typeof requestId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(requestId)) return json(400, { error: "invalid requestId" });
+  try {
+    const result = await replayIncoming(deps, { channel: "web", channelKey: sessionId, requestId, message });
+    return json(200, result);
+  } catch (error) {
+    if (error instanceof RequestIdentityConflict) return json(409, { error: "requestId already used for another message" });
+    throw error;
+  }
 }
 
 async function handleTelegram(deps: AppDeps, request: HttpRequest): Promise<HttpResponse> {

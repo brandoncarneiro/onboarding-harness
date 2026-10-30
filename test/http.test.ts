@@ -31,7 +31,7 @@ describe("http", () => {
       method: "POST",
       path: "/api/chat",
       headers: {},
-      body: JSON.stringify({ sessionId: "web-1", message: "   " }),
+      body: JSON.stringify({ requestId: crypto.randomUUID(), sessionId: "web-1", message: "   " }),
     });
     assert.equal(empty.status, 400);
     assert.deepEqual(harness.snapshot(), before);
@@ -40,7 +40,7 @@ describe("http", () => {
       method: "POST",
       path: "/api/chat",
       headers: {},
-      body: JSON.stringify({ sessionId: "web-1", message: "Sample Person" }),
+      body: JSON.stringify({ requestId: crypto.randomUUID(), sessionId: "web-1", message: "Sample Person" }),
     });
     assert.equal(chat.status, 200);
     const payload = JSON.parse(chat.body) as { reply: string; sessionId: string; status: string };
@@ -74,7 +74,7 @@ describe("http", () => {
       const chat = await fetch(`${base}/api/chat`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: "live-session", message: "Sample Person" }),
+        body: JSON.stringify({ requestId: crypto.randomUUID(), sessionId: "live-session", message: "Sample Person" }),
       });
       const payload = await chat.json() as { reply: string };
       assert.match(payload.reply, /What is your Email/);

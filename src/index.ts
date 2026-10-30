@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { loadConfig, loadEnvFile } from "./config.ts";
-import { applyIncoming } from "./conversation.ts";
+import { replayIncoming } from "./replay.ts";
 import { createModel } from "./model.ts";
 import { openDatabase } from "./db.ts";
 import { createHttpServer } from "./http.ts";
@@ -20,6 +20,7 @@ const deps = {
   config,
   model: createModel(config),
   fields: schema.fields,
+  organizationName: schema.title,
   messenger: createMessenger(config),
   now: () => Date.now(),
 };
@@ -30,10 +31,13 @@ startImsg({
   db,
   now: deps.now,
   pairPort: config.imsgPairPort,
-  receive: async (chatId, text) => {
-    const result = await applyIncoming(deps, {
+  receive: async (_chatId, text, guid, replyTo) => {
+    if (!guid || !replyTo) throw new Error("iMessage identity and recipient required");
+    const result = await replayIncoming(deps, {
+      requestId: guid,
       channel: "imessage",
-      channelKey: String(chatId),
+      channelKey: replyTo,
+      replyTo,
       message: text,
     });
     return result.reply;
