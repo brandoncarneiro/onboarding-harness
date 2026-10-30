@@ -28,6 +28,8 @@ npm run typecheck
 
 Without `MODEL_API_KEY`, the server uses a local model that repeats a reply the server has already checked. To use your own model, set `MODEL_API_KEY`, `MODEL_BASE_URL`, and `MODEL_NAME` for any API that accepts OpenAI-style chat completions. The model sits behind `LanguageModel` in `src/model.ts`.
 
+Messages are limited to 4,096 UTF-16 code units (JavaScript string length), measured before trimming whitespace. Oversized messages do not change the intake or call the model. The web API returns HTTP 413; messaging channels return a request to shorten the message.
+
 ## Example Community Church
 
 The demo schema is `fixtures/record.schema.json`. It asks for name, email, mobile, organization name, and city, plus the agreements that schema marks required. Replace that file to change the intake. Field titles come from the schema.
@@ -116,6 +118,8 @@ One SQLite file, `data/onboarding.sqlite` unless `DATABASE_PATH` is set, holds r
 Phone and iMessage use [openclaw/imsg](https://github.com/openclaw/imsg) (MIT). The harness speaks JSON-RPC 2.0 to an `imsg rpc` child on stdin and stdout. It calls `chats.list`, `messages.history`, `watch.subscribe`, `watch.unsubscribe`, and `send` only. `send` sets `transport` to `applescript`. The harness does not call the IMCore bridge, `imsg launch`, or anything that needs SIP disabled.
 
 OpenClaw is not imported and not required. Install the `imsg` binary on the Mac that is signed into Messages.
+
+Intake accepts verified one-to-one chats only. Group chats and notifications with missing, malformed, or conflicting chat metadata are ignored without changing the intake or sending a reply. Use an `imsg` version whose watch notifications include `is_group`, `chat_identifier`, `chat_guid`, and `participants`; older versions that omit this metadata cannot start an intake. This restriction applies to both local and remote mode.
 
 On that same Mac, set `IMSG_MODE=local`. The harness spawns `imsg rpc`.
 

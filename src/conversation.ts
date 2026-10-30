@@ -5,6 +5,7 @@ import { replyForSearch } from "./grounding.ts";
 import { searchKnowledge } from "./knowledge.ts";
 import { issueLinkCode, linkIssuedText, redeemLinkCode } from "./linkCodes.ts";
 import type { LanguageModel, ReplyMode } from "./model.ts";
+import { MAX_MESSAGE_LENGTH, MESSAGE_TOO_LONG_REPLY } from "./messageLimits.ts";
 import type { OutboundMessenger } from "./outbound.ts";
 import {
   LINK_FAILED_REPLY,
@@ -66,11 +67,14 @@ export function prepareIncoming(
   deps: AppDeps,
   input: { channel: Channel; channelKey: string; message: string },
 ): PreparedIncoming {
-  const text = input.message.trim();
   const existing = readSession(deps.db, input.channel, input.channelKey);
   const current = existing
     ? readGroup(deps.db, existing.groupId)
     : { id: "", values: {}, pendingHash: null, confirmationHash: null, savedRecordId: null };
+  if (input.message.length > MAX_MESSAGE_LENGTH) {
+    return { result: result(input.channelKey, MESSAGE_TOO_LONG_REPLY, deps.fields, current), mode: "prompt" };
+  }
+  const text = input.message.trim();
   const decision = decide(deps, current.values, current.pendingHash, current.confirmationHash, text);
 
   if (decision.kind === "refuse") {
@@ -118,6 +122,7 @@ export function prepareIncoming(
 }
 
 export async function completeIncoming(deps: AppDeps, message: string, prepared: PreparedIncoming): Promise<ChatResult> {
+  if (message.length > MAX_MESSAGE_LENGTH) return prepared.result;
   const reply = await phrase(deps, message.trim(), prepared.result.reply, prepared.mode);
   return { ...prepared.result, reply };
 }

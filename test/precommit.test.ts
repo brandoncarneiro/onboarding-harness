@@ -125,7 +125,7 @@ describe("pre-commit findings", () => {
   it("ignores an edited iMessage and a repeated message guid", async () => {
     assert.equal(inboundFromNotification({
       method: "message",
-      params: { message: { type: "edited", chat_id: 7, text: "yes", is_from_me: false, guid: "edited-1" } },
+      params: { message: { type: "edited", chat_id: 7, text: "yes", is_from_me: false, is_group: false, chat_identifier: "+15555550100", chat_guid: "iMessage;-;+15555550100", participants: ["+15555550100"], sender: "+15555550100", guid: "edited-1" } },
     }), null);
 
     const io = new ScriptedStdio();
@@ -141,7 +141,7 @@ describe("pre-commit findings", () => {
     const notice = {
       jsonrpc: "2.0",
       method: "message",
-      params: { subscription: 1, message: { chat_id: 7, text: "/start", is_from_me: false, guid: "same-guid" } },
+      params: { subscription: 1, message: { chat_id: 7, text: "/start", is_from_me: false, is_group: false, chat_identifier: "+15555550100", chat_guid: "iMessage;-;+15555550100", participants: ["+15555550100"], sender: "+15555550100", guid: "same-guid" } },
     };
     io.receive(JSON.stringify(notice));
     io.receive(JSON.stringify(notice));
@@ -256,7 +256,7 @@ describe("pre-commit findings", () => {
         io.receive(JSON.stringify({
           jsonrpc: "2.0",
           method: "message",
-          params: { message: { chat_id: 3, text: "secret intake text", is_from_me: false, guid: "g-send" } },
+          params: { message: { chat_id: 3, text: "secret intake text", is_from_me: false, is_group: false, chat_identifier: "+15555550100", chat_guid: "iMessage;-;+15555550100", participants: ["+15555550100"], sender: "+15555550100", guid: "g-send" } },
         }));
         await new Promise((resolve) => setTimeout(resolve, 20));
         const send = JSON.parse(io.written.at(-1) ?? "{}") as { id: string };

@@ -9,6 +9,7 @@ import { intakeStatus } from "./values.ts";
 import { withTransaction } from "./db.ts";
 import { isRecord } from "./util.ts";
 import { secretMatches } from "./secrets.ts";
+import { MAX_MESSAGE_LENGTH, MESSAGE_TOO_LONG_REPLY } from "./messageLimits.ts";
 
 export type HttpRequest = {
   method: string;
@@ -61,13 +62,13 @@ async function respond(deps: AppDeps, req: IncomingMessage, res: ServerResponse)
     });
     res.writeHead(response.status, response.headers);
     res.end(response.body);
-  } catch {
+  } catch (error) {
     if (res.headersSent) {
       res.end();
       return;
     }
-    res.writeHead(500, JSON_HEADERS);
-    res.end(JSON.stringify({ error: "internal error" }));
+    res.writeHead(error instanceof BodyTooLarge ? 413 : 500, JSON_HEADERS);
+    res.end(JSON.stringify({ error: error instanceof BodyTooLarge ? "body too large" : "internal error" }));
   }
 }
 
@@ -83,7 +84,9 @@ async function handleChat(deps: AppDeps, rawBody: string): Promise<HttpResponse>
   if (typeof sessionId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(sessionId)) {
     return json(400, { error: "invalid session" });
   }
-  if (typeof message !== "string" || !message.trim()) return json(400, { error: "invalid message" });
+  if (typeof message !== "string") return json(400, { error: "invalid message" });
+  if (message.length > MAX_MESSAGE_LENGTH) return json(413, { error: MESSAGE_TOO_LONG_REPLY });
+  if (!message.trim()) return json(400, { error: "invalid message" });
   const result = await applyIncoming(deps, { channel: "web", channelKey: sessionId, message });
   return json(200, result);
 }
@@ -156,7 +159,7 @@ async function deliverTelegramUpdate(deps: AppDeps, update: TelegramUpdate): Pro
               let message = update.text;
               // Old rows have no atomic checkpoint. A legacy consent that has
               // reached confirmation must be resumed, never treated as a new yes.
-              if (stored.checkpoint_version === 0 && message.trim() === "yes") {
+              if (stored.checkpoint_version === 0 && message.length <= MAX_MESSAGE_LENGTH && message.trim() === "yes") {
                 const session = readSession(deps.db, "telegram", update.sessionKey);
                 if (session && intakeStatus(deps.fields, readGroup(deps.db, session.groupId)) === "awaiting_confirmation") {
                   message = "start";
@@ -253,13 +256,15 @@ function normalizeHeaders(headers: IncomingMessage["headers"]): Record<string, s
   return normalized;
 }
 
+class BodyTooLarge extends Error {}
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > 1_000_000) throw new Error("body too large");
+    if (size > 1_000_000) throw new BodyTooLarge("body too large");
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString("utf8");

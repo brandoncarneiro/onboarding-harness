@@ -1,6 +1,5 @@
-const VERSE = /\d+:\d+(?:-\d+)?/g;
 const ASKS = /\b(verse|scripture|quote)\b/i;
-const BOOKS = new Set([
+const BOOKS = [
   "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
   "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
   "Nehemiah", "Esther", "Job", "Psalm", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon",
@@ -12,7 +11,12 @@ const BOOKS = new Set([
   "1 John", "2 John", "3 John", "Jude", "Revelation",
   // Retain the fictional reference used by the bundled example and tests.
   "Example",
-].map((book) => book.toLowerCase()));
+];
+
+// Start at a recognized book, not at every digit of an arbitrary numeric run.
+// The fixed book alternatives and disjoint whitespace/digit runs keep matching
+// linear without repeatedly splitting the prefix for false time references.
+const REFERENCE = new RegExp(`(?<!\\S)(${BOOKS.map((book) => book.replaceAll(" ", "\\s+")).join("|")})\\s*(\\d+:\\d+(?:-\\d+)?)`, "i");
 
 export function scriptureReply(message: string): string | null {
   const reference = findReference(message);
@@ -23,15 +27,7 @@ export function scriptureReply(message: string): string | null {
 }
 
 function findReference(message: string): string | null {
-  for (const match of message.matchAll(VERSE)) {
-    const verse = match[0];
-    const index = match.index;
-    if (verse === undefined || index === undefined) continue;
-    const words = message.slice(0, index).trim().split(/\s+/).filter(Boolean).slice(-3);
-    for (let count = words.length; count > 0; count -= 1) {
-      const book = words.slice(-count).join(" ");
-      if (BOOKS.has(book.toLowerCase())) return `${book} ${verse}`;
-    }
-  }
-  return null;
+  const match = REFERENCE.exec(message);
+  if (!match?.[1] || !match[2]) return null;
+  return `${match[1].replace(/\s+/g, " ")} ${match[2]}`;
 }

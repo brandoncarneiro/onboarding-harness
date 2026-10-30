@@ -129,7 +129,7 @@ describe("imsg", () => {
       io.receive(JSON.stringify({
         jsonrpc: "2.0",
         method: "message",
-        params: { subscription: 1, message: { chat_id: 7, text: "/start", is_from_me: true } },
+        params: { subscription: 1, message: { chat_id: 7, text: "/start", is_from_me: true, is_group: false, chat_identifier: "+15555550100", chat_guid: "iMessage;-;+15555550100", participants: ["+15555550100"], sender: "+15555550100" } },
       }));
       await settle();
       assert.deepEqual(harness.snapshot(), beforeOwn);
@@ -138,7 +138,7 @@ describe("imsg", () => {
       io.receive(JSON.stringify({
         jsonrpc: "2.0",
         method: "message",
-        params: { subscription: 1, message: { chat_id: 7, text: "/start", is_from_me: false } },
+        params: { subscription: 1, message: { chat_id: 7, text: "/start", is_from_me: false, is_group: false, chat_identifier: "+15555550100", chat_guid: "iMessage;-;+15555550100", participants: ["+15555550100"], sender: "+15555550100" } },
       }));
       await settle();
       const outgoing = request(io.written.at(-1) ?? "");

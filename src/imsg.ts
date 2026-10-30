@@ -174,6 +174,15 @@ export function inboundFromNotification(note: RpcNotification): InboundImsg | nu
   const message = note.params.message;
   if (message.type === "edited" || message.type === "unsent") return null;
   if (message.is_from_me !== false) return null;
+  // imsg can emit is_group=false with empty routing fields when chat lookup is
+  // unavailable. Require positive direct-chat metadata before touching intake.
+  if (message.is_group !== false) return null;
+  if (typeof message.chat_identifier !== "string" || !message.chat_identifier.trim()
+    || message.chat_identifier.includes(";+;")) return null;
+  if (typeof message.chat_guid !== "string" || !/^[^;\s]+;-;[^;\s]+$/.test(message.chat_guid)) return null;
+  if (!Array.isArray(message.participants) || message.participants.length !== 1) return null;
+  const participant: unknown = message.participants[0];
+  if (typeof participant !== "string" || !participant.trim() || participant !== message.sender) return null;
   if (typeof message.text !== "string" || !message.text.trim()) return null;
   if (!isPositiveInt(message.chat_id)) return null;
   const guid = typeof message.guid === "string" && message.guid ? message.guid : undefined;
