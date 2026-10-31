@@ -8,11 +8,13 @@ The checked-in example is a fictional local church, Example Community Church. No
 
 ## Install
 
-Node 24 is required.
+Clone this repository and open a shell in its root. Node 24 or newer is required. If you use nvm, `nvm use` selects the checked-in Node version; otherwise skip that command. Use fictional data while evaluating the example.
 
 ```bash
-nvm use
-npm install
+git clone https://github.com/brandoncarneiro/onboarding-harness.git
+cd onboarding-harness
+nvm use # optional: only if nvm is installed
+npm ci
 cp .env.example .env
 npm start
 ```
@@ -21,9 +23,20 @@ The server listens on port 8787 unless `PORT` is set. Open `http://127.0.0.1:878
 
 `.env.example` lists setting names only. Put values in `.env`, which is not committed. Tests do not read a model key and do not use the network.
 
+Development checks also require Gitleaks **8.30.1**. If it is not already on your PATH, install the checksum-verified binary into a version-specific directory:
+
+```sh
+node scripts/install-gitleaks.mjs "$HOME/.local/share/onboarding-harness/gitleaks-8.30.1/bin"
+export PATH="$HOME/.local/share/onboarding-harness/gitleaks-8.30.1/bin:$PATH"
+```
+
+Install this checkout's secret-prevention hooks before contributing. Setup refuses to replace conflicting existing hooks; integrate those explicitly. Commits scan the actual staged files and pushes scan full history, with redacted findings. These local safeguards do not establish GitHub branch protection or required-check enforcement.
+
 ```bash
+npm run setup:hooks
 npm test
 npm run typecheck
+npm run check:secrets
 ```
 
 Staff can retrieve confirmed submissions on the server with `npm run export -- --format csv --output /private/staff/intake.csv` (use a new file in an existing private directory). JSON is also supported. Export includes saved revisions, excludes drafts, and creates owner-only files. See [record export](docs/record-export.md) for access, format, and handling instructions.
@@ -119,13 +132,13 @@ curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" 
 
 `YOUR_TELEGRAM_WEBHOOK_SECRET` is the same value as `TELEGRAM_WEBHOOK_SECRET`. Telegram sends it in `X-Telegram-Bot-Api-Secret-Token`. A request without that exact secret does not write a session, a record, a link code, or a knowledge row. When the token is set, the server also calls Telegram `sendMessage`. The web page posts to `POST /api/chat` and does not need the bot token.
 
-`GET /health` returns `{"ok":true}`.
+`GET /health` returns `{"ok":true}`. See [deployment and operator acceptance](docs/deployment.md) for HTTPS, private pairing transport, data handling, and integration checks. A local test pass does not establish live Telegram delivery or Mac Messages operation.
 
 One SQLite file, `data/onboarding.sqlite` unless `DATABASE_PATH` is set, holds records, sessions, link codes, and knowledge pages. Search is full text. Each hit has a URL and a passage.
 
 ## Phone and iMessage
 
-Phone and iMessage use [openclaw/imsg](https://github.com/openclaw/imsg) (MIT). The harness speaks JSON-RPC 2.0 to an `imsg rpc` child on stdin and stdout. It calls `chats.list`, `messages.history`, `watch.subscribe`, `watch.unsubscribe`, and `send` only. `send` sets `transport` to `applescript`. The harness does not call the IMCore bridge, `imsg launch`, or anything that needs SIP disabled.
+Phone and iMessage use the optional external [openclaw/imsg](https://github.com/openclaw/imsg) binary (MIT), which is spawned rather than vendored or installed by npm. The harness speaks JSON-RPC 2.0 to an `imsg rpc` child on stdin and stdout. It calls `chats.list`, `messages.history`, `watch.subscribe`, `watch.unsubscribe`, and `send` only. `send` sets `transport` to `applescript`. The harness does not call the IMCore bridge, `imsg launch`, or anything that needs SIP disabled.
 
 OpenClaw is not imported and not required. Install the `imsg` binary on the Mac that is signed into Messages.
 
@@ -161,4 +174,8 @@ V0 does not crawl the web and does not call Firecrawl, Exa, Tavily, Parallel, Br
 
 ## License
 
-MIT. See `LICENSE`.
+Project code uses [MIT](LICENSE). The [Contributor Covenant code of conduct](CODE_OF_CONDUCT.md) retains its separate CC BY-SA 4.0 license and attribution. See the [dependency and third-party license inventory](docs/licenses.md).
+
+## Contributing and support
+
+This project is in pre-release development; no versioned public release is declared. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the pull request process, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, and [CHANGELOG.md](CHANGELOG.md) for recorded changes. Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Private security and moderation channels must be configured before public reporting is operational.

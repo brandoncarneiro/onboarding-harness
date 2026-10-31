@@ -1,0 +1,28 @@
+[Unit]
+Description=Single-organization onboarding harness
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=onboarding-harness
+Group=onboarding-harness
+WorkingDirectory=/opt/onboarding-harness/current
+EnvironmentFile=/etc/onboarding-harness/environment
+# Adjust to the absolute path of your verified Node 24 installation.
+ExecStart=/usr/local/bin/node src/index.ts
+Restart=on-failure
+RestartSec=5
+UMask=0077
+StateDirectory=onboarding-harness
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/onboarding-harness
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,4 @@
+# Replace this reserved example name with your real DNS hostname.
+intake.example.org {
+    reverse_proxy 127.0.0.1:8787
+}

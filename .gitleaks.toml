@@ -1,0 +1,12 @@
+title = "Onboarding harness secret prevention"
+
+[extend]
+useDefault = true
+
+# Custom model endpoints can issue credentials without a provider-specific prefix.
+# Match nonempty operator credential assignments; the sanitized template stays blank.
+[[rules]]
+id = "operator-environment-credential"
+description = "Credential assigned to an operator environment variable"
+regex = '''(?m)^[\t ]*(?:export[\t ]+)?(?:[A-Z][A-Z0-9]*_)*(?:API_KEY|TOKEN|SECRET|PASSWORD|PAIR_CODE)[\t ]*=[\t ]*["']?([^\s"'#]{8,})'''
+secretGroup = 1
