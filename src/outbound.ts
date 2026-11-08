@@ -20,6 +20,7 @@ export class TelegramBotMessenger implements OutboundMessenger {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text }),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error(`telegram send failed: ${response.status}`);
   }

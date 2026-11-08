@@ -65,6 +65,7 @@ export class OpenAiCompatibleModel implements LanguageModel {
         temperature: 0,
         messages: request.messages,
       }),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
       throw new Error(`model request failed: ${response.status}`);
