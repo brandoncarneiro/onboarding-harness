@@ -239,4 +239,4 @@ Project code uses [MIT](LICENSE). The [Contributor Covenant code of conduct](COD
 
 ## Contributing and support
 
-This project is in pre-release development; no versioned public release is declared. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the pull request process, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, and [CHANGELOG.md](CHANGELOG.md) for recorded changes. Read [SECURITY.md](SECURITY.md) before reporting a vulnerability.
+The first versioned release is 0.1.0. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the pull request process, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, and [CHANGELOG.md](CHANGELOG.md) for recorded changes. Read [SECURITY.md](SECURITY.md) before reporting a vulnerability.

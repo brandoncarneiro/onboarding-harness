@@ -1,8 +1,10 @@
 # Changelog
 
-User-visible changes will be recorded here. The project is in pre-release development. No versioned public release is declared.
+User-visible changes are recorded here.
 
 ## Unreleased
+
+## 0.1.0 - 2026-11-08
 
 ### Added
 
