@@ -6,9 +6,7 @@ This project is in pre-release development. Reports should identify the exact co
 
 ## Report privately
 
-**[PRIVATE_SECURITY_CONTACT — replace with a monitored private security reporting address or a verified private vulnerability-reporting URL before publication]**
-
-This placeholder is not a reporting destination. This policy is not ready to publish until the private channel is configured, tested, and staffed.
+Report vulnerabilities through GitHub's private vulnerability reporting: open the repository's **Security** tab and select **Report a vulnerability**. The report is visible only to you and the maintainers.
 
 Do not open a public issue or pull request with exploit details, credentials, real intake records, chat transcripts, or participant identifiers. If a report includes sensitive data, minimize and redact it. Use a fictional record or local fake whenever possible.
 

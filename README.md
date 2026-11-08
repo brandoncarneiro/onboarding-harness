@@ -6,6 +6,21 @@ V0 is one conversation that saves a record. A person can finish it in Telegram, 
 
 The checked-in example is a fictional local church, Example Community Church. No customer is represented here.
 
+## Features
+
+- One conversation that collects answers, shows a summary, and saves a record only after the person confirms that exact set of details.
+- Web chat, Telegram webhook, and optional iMessage channels. Telegram does not need a Mac. iMessage needs a Mac signed into Messages.
+- One-time codes that link a web chat to a Telegram chat so they share one record.
+- Grounded replies from knowledge pages the organization supplies. A search miss is not presented as a fact.
+- Durable message retries, so a lost response does not apply an answer twice.
+- Staff CSV or JSON export of confirmed saved revisions, run on the server.
+
+## Requirements
+
+- Node.js 24 or newer. The checked-in `.nvmrc` selects Node 24 if you use nvm. Git is needed to clone the repository.
+- No production npm dependencies. Development checks need Gitleaks 8.30.1, documented under [Install](#install).
+- Optional, for live channels: a Telegram bot token and webhook secret, an OpenAI-compatible model endpoint and key, and the external `imsg` binary on a Mac signed into Messages. The local example needs none of these.
+
 ## Install
 
 Clone this repository and open a shell in its root. Node 24 or newer is required. If you use nvm, `nvm use` selects the checked-in Node version; otherwise skip that command. Use fictional data while evaluating the example.
@@ -44,6 +59,52 @@ Staff can retrieve confirmed submissions on the server with `npm run export -- -
 Without `MODEL_API_KEY`, the server uses a local model that repeats a reply the server has already checked. To use your own model, set `MODEL_API_KEY`, `MODEL_BASE_URL`, and `MODEL_NAME` for any API that accepts OpenAI-style chat completions. The model sits behind `LanguageModel` in `src/model.ts`.
 
 Messages are limited to 4,096 UTF-16 code units (JavaScript string length), measured before trimming whitespace. Oversized messages do not change the intake or call the model. The web API returns HTTP 413; messaging channels return a request to shorten the message.
+
+## Configuration
+
+All settings are optional for the local example. Copy `.env.example` to `.env` and fill in only what you use. Every name below is listed in `.env.example`. The server reads these names in `src/config.ts`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8787` | Port the HTTP server listens on. |
+| `DATABASE_PATH` | `data/onboarding.sqlite` | Path to the SQLite file that holds records and sessions. |
+| `ORGANIZATION_SCHEMA_PATH` | `fixtures/record.schema.json` | Path to the intake schema JSON file. |
+| `KNOWLEDGE_DIR` | `fixtures/knowledge` | Folder of knowledge pages used for grounded replies. |
+| `MODEL_API_KEY` | empty, local model used | API key for an OpenAI-compatible model endpoint. |
+| `MODEL_BASE_URL` | empty | Base URL for that model endpoint. |
+| `MODEL_NAME` | empty | Model name for that endpoint. |
+| `TELEGRAM_BOT_TOKEN` | empty, Telegram disabled | Bot token for Telegram replies. |
+| `TELEGRAM_WEBHOOK_SECRET` | empty | Shared secret Telegram must send with each webhook request. |
+| `IMSG_MODE` | empty, iMessage disabled | Set to `local` or `remote` to enable iMessage. |
+| `IMSG_COMMAND` | `imsg` | Path or name of the external `imsg` binary. |
+| `IMSG_PAIR_HOST` | empty | Host of the remote harness, set on the Mac companion. |
+| `IMSG_PAIR_PORT` | `8791` | Port of the remote pairing socket. |
+| `IMSG_PAIR_CODE` | empty | One-time pairing code, set on the Mac companion. |
+
+## Project structure
+
+```text
+src/          Server code (intake, channels, storage, model handoff)
+test/         Node test suite, using local fakes and fictional data
+public/       Bundled web chat page
+fixtures/     Example schema and knowledge pages (fictional)
+docs/         Architecture, deployment, operations, schema, export, and license guides
+deploy/       Example reverse proxy, service file, and snapshot helper
+scripts/      Secret-check, hook setup, and Gitleaks install helpers
+.github/      CI workflow, Dependabot, and issue and pull request templates
+```
+
+## Tests
+
+Run the checks from the repository root:
+
+```bash
+npm test
+npm run typecheck
+npm run check:secrets
+```
+
+`npm test` uses local fakes and temporary data. It needs no model key, no messaging credentials, and no network access. `npm run typecheck` runs the TypeScript compiler in check-only mode. `npm run check:secrets` scans full history with Gitleaks 8.30.1; install that scanner first as described under [Install](#install) and run `npm run setup:hooks` before committing.
 
 ## Example Community Church
 
@@ -178,4 +239,4 @@ Project code uses [MIT](LICENSE). The [Contributor Covenant code of conduct](COD
 
 ## Contributing and support
 
-This project is in pre-release development; no versioned public release is declared. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the pull request process, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, and [CHANGELOG.md](CHANGELOG.md) for recorded changes. Read [SECURITY.md](SECURITY.md) before reporting a vulnerability. Private security and moderation channels must be configured before public reporting is operational.
+This project is in pre-release development; no versioned public release is declared. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the pull request process, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, and [CHANGELOG.md](CHANGELOG.md) for recorded changes. Read [SECURITY.md](SECURITY.md) before reporting a vulnerability.
