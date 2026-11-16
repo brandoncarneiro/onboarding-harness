@@ -91,7 +91,7 @@ fixtures/     Example schema and knowledge pages (fictional)
 docs/         Architecture, deployment, operations, schema, export, and license guides
 deploy/       Example reverse proxy, service file, and snapshot helper
 scripts/      Secret-check, hook setup, and Gitleaks install helpers
-.github/      CI workflow, Dependabot, and issue and pull request templates
+.github/      CI workflow and issue and pull request templates
 ```
 
 ## Tests
