@@ -4,7 +4,11 @@ on:
   pull_request:
   push:
     branches: [main]
-  workflow_dispatch:
+
+# Free-plan minutes are the binding limit: drop superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
